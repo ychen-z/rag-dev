@@ -1,0 +1,52 @@
+# RAG 知识库演示配置文件
+
+# 默认语言设置
+language: zh_CN
+
+# 嵌入模型配置
+embedding:
+  model: all-MiniLM-L6-v2
+  dimension: 384
+
+# 文本分块配置
+chunking:
+  chunk_size: 500
+  overlap: 50
+
+# 搜索配置
+search:
+  default_top_k: 3
+  cache_size: 100
+  min_score: 0.0
+
+# 服务器配置
+server:
+  host: 0.0.0.0
+  port: 5001
+  debug: true
+
+# 数据存储路径
+storage:
+  data_dir: data
+  index_file: index.faiss
+  documents_file: documents.json
+  id_mapping_file: id_mapping.json
+
+# UI 配置
+ui:
+  theme: light
+  title: RAG 知识库演示
+  messages:
+    add_document: 添加文档
+    search: 搜索
+    delete: 删除
+    clear_all: 清空知识库
+    load_samples: 加载示例数据
+    no_results: 未找到相关信息
+    loading: 加载中...
+    success: 操作成功
+    error: 操作失败
+    confirm_clear: 确定要清空所有数据吗？
+    empty_input: 请输入内容
+    document_added: 文档已添加
+    document_deleted: 文档已删除

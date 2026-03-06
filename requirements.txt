@@ -1,0 +1,7 @@
+# Vector Database RAG Demo Dependencies
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
+flask>=2.3.0
+flask-cors>=4.0.0
+numpy>=1.24.0
+pyyaml>=6.0

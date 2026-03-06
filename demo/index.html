@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>RAG 知识库演示</title>
+        <!-- Tailwind CSS CDN -->
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            primary: '#3B82F6',
+                            secondary: '#10B981',
+                            accent: '#8B5CF6'
+                        }
+                    }
+                }
+            }
+        </script>
+        <style>
+            /* 自定义滚动条 */
+            ::-webkit-scrollbar {
+                width: 6px;
+                height: 6px;
+            }
+            ::-webkit-scrollbar-track {
+                background: #f1f5f9;
+                border-radius: 3px;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 3px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
+            }
+            /* 加载动画 */
+            .loading-dots::after {
+                content: '';
+                animation: dots 1.5s steps(4, end) infinite;
+            }
+            @keyframes dots {
+                0%,
+                20% {
+                    content: '';
+                }
+                40% {
+                    content: '.';
+                }
+                60% {
+                    content: '..';
+                }
+                100%,
+                80% {
+                    content: '...';
+                }
+            }
+            /* 淡入动画 */
+            .fade-in {
+                animation: fadeIn 0.3s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from {
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        </style>
+    </head>
+    <body class="bg-gradient-to-br from-slate-50 to-blue-50 min-h-screen">
+        <div id="app" class="container mx-auto px-4 py-8 max-w-6xl">
+            <!-- 头部 -->
+            <header class="text-center mb-8">
+                <h1 class="text-4xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent mb-2">
+                RAG 知识库演示
+            </h1>
+                <p class="text-slate-600">基于 FAISS 的向量数据库 + 语义搜索</p>
+            </header>
+
+            <!-- 统计卡片 -->
+            <div id="stats-container" class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-slate-800" id="stat-docs">0</p>
+                            <p class="text-sm text-slate-500">文档数</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-slate-800" id="stat-chunks">0</p>
+                            <p class="text-sm text-slate-500">分块数</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-slate-800" id="stat-vectors">0</p>
+                            <p class="text-sm text-slate-500">向量数</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-4 hover:shadow-md transition-shadow">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-slate-800" id="stat-dimension">384</p>
+                            <p class="text-sm text-slate-500">向量维度</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 主要功能区 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- 搜索区域 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <h2 class="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                    语义搜索
+                </h2>
+                    <div class="space-y-4">
+                        <div class="relative">
+                            <input 
+                            type="text" 
+                            id="search-input" 
+                            placeholder="输入搜索内容，例如：什么是人工智能？"
+                            class="w-full px-4 py-3 pr-12 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                            onkeypress="if(event.key==='Enter') performSearch()"
+                        >
+                            <button 
+                            onclick="performSearch()"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- 搜索结果 -->
+                        <div id="search-results" class="space-y-3 max-h-96 overflow-y-auto">
+                            <div class="text-center py-8 text-slate-400">
+                                <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                                <p>输入关键词开始搜索</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 添加文档区域 -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                    <h2 class="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                        </svg>
+                    添加文档
+                </h2>
+                    <div class="space-y-4">
+                        <input 
+                        type="text" 
+                        id="doc-title" 
+                        placeholder="文档标题（可选）"
+                        class="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all"
+                    >
+                        <textarea 
+                        id="doc-content" 
+                        placeholder="输入文档内容..."
+                        rows="6"
+                        class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-secondary/20 focus:border-secondary outline-none transition-all resize-none"
+                    ></textarea>
+                        <button 
+                        onclick="addDocument()"
+                        class="w-full py-3 bg-secondary text-white rounded-xl hover:bg-emerald-600 transition-colors font-medium flex items-center justify-center gap-2"
+                    >
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                            </svg>
+                        添加文档
+                    </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作按钮区 -->
+            <div class="flex flex-wrap gap-3 mb-8">
+                <button 
+                onclick="loadSamples()"
+                class="px-5 py-2.5 bg-accent text-white rounded-xl hover:bg-purple-600 transition-colors font-medium flex items-center gap-2"
+            >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                加载示例数据
+            </button>
+                <button 
+                onclick="refreshDocuments()"
+                class="px-5 py-2.5 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-colors font-medium flex items-center gap-2"
+            >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                刷新列表
+            </button>
+                <button 
+                onclick="confirmClear()"
+                class="px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium flex items-center gap-2"
+            >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                    </svg>
+                清空知识库
+            </button>
+            </div>
+
+            <!-- 文档列表 -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-6">
+                <h2 class="text-xl font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                    </svg>
+                文档列表
+            </h2>
+                <div id="documents-list" class="space-y-3">
+                    <div class="text-center py-8 text-slate-400">
+                        <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                        </svg>
+                        <p>暂无文档，请添加或加载示例数据</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Toast 通知 -->
+            <div id="toast" class="fixed bottom-4 right-4 transform translate-y-full opacity-0 transition-all duration-300">
+                <div class="px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 max-w-sm">
+                    <span id="toast-icon"></span>
+                    <span id="toast-message" class="text-sm font-medium"></span>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // API 基础地址
+            const API_BASE = '';
+
+            // 页面加载时初始化
+            document.addEventListener('DOMContentLoaded', () => {
+                refreshStats();
+                refreshDocuments();
+            });
+
+            // 刷新统计信息
+            async function refreshStats() {
+                try {
+                    const response = await fetch(`${API_BASE}/api/stats`);
+                    const data = await response.json();
+                    if (data.success) {
+                        document
+                            .getElementById('stat-docs')
+                            .textContent = data.stats.total_documents;
+                        document
+                            .getElementById('stat-chunks')
+                            .textContent = data.stats.total_chunks;
+                        document
+                            .getElementById('stat-vectors')
+                            .textContent = data
+                            .stats
+                            .vector_stats
+                                ?.total_vectors || 0;
+                        document
+                            .getElementById('stat-dimension')
+                            .textContent = data
+                            .stats
+                            .vector_stats
+                                ?.dimension || 384;
+                    }
+                } catch (error) {
+                    console.error('获取统计信息失败:', error);
+                }
+            }
+
+            // 刷新文档列表
+            async function refreshDocuments() {
+                try {
+                    const response = await fetch(`${API_BASE}/api/documents`);
+                    const data = await response.json();
+
+                    const container = document.getElementById('documents-list');
+
+                    if (data.success && data.documents.length > 0) {
+                        container.innerHTML = data
+                            .documents
+                            .map(doc => `
+                        <div class="bg-slate-50 rounded-xl p-4 hover:bg-slate-100 transition-colors fade-in">
+                            <div class="flex items-start justify-between gap-4">
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="font-medium text-slate-800 truncate">${escapeHtml(doc.title)}</h3>
+                                    <p class="text-sm text-slate-500 mt-1 line-clamp-2">${escapeHtml(doc.content_preview)}</p>
+                                    <div class="flex items-center gap-4 mt-2 text-xs text-slate-400">
+                                        <span class="flex items-center gap-1">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                                            </svg>
+                                            ${doc.chunks_count} 个分块
+                                        </span>
+                                        <span>ID: ${doc.id}</span>
+                                    </div>
+                                </div>
+                                <button 
+                                    onclick="deleteDocument('${doc.id}')"
+                                    class="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="删除"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                    `)
+                            .join('');
+                    } else {
+                        container.innerHTML = `
+                        <div class="text-center py-8 text-slate-400">
+                            <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
+                            </svg>
+                            <p>暂无文档，请添加或加载示例数据</p>
+                        </div>
+                    `;
+                    }
+
+                    refreshStats();
+                } catch (error) {
+                    console.error('获取文档列表失败:', error);
+                    showToast('获取文档列表失败', 'error');
+                }
+            }
+
+            // 执行搜索
+            async function performSearch() {
+                const query = document
+                    .getElementById('search-input')
+                    .value
+                    .trim();
+                if (!query) {
+                    showToast('请输入搜索内容', 'warning');
+                    return;
+                }
+
+                const container = document.getElementById('search-results');
+                container.innerHTML = `
+                <div class="text-center py-8 text-slate-400">
+                    <div class="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                    <p class="loading-dots">搜索中</p>
+                </div>
+            `;
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/search`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({query, top_k: 5})
+                    });
+                    const data = await response.json();
+
+                    if (data.success && data.results.length > 0) {
+                        container.innerHTML = data
+                            .results
+                            .map((result, index) => `
+                        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 fade-in" style="animation-delay: ${index * 0.1}s">
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <h3 class="font-medium text-slate-800">${escapeHtml(result.title)}</h3>
+                                <span class="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded-full font-medium">
+                                    ${ (result.score * 100).toFixed(1)}%
+                                </span>
+                            </div>
+                            <p class="text-sm text-slate-600 bg-white/50 rounded-lg p-3 border border-slate-100">
+                                ${escapeHtml(result.chunk)}
+                            </p>
+                        </div>
+                    `)
+                            .join('');
+                    } else {
+                        container.innerHTML = `
+                        <div class="text-center py-8 text-slate-400">
+                            <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p>未找到相关结果</p>
+                        </div>
+                    `;
+                    }
+                } catch (error) {
+                    console.error('搜索失败:', error);
+                    container.innerHTML = `
+                    <div class="text-center py-8 text-red-400">
+                        <p>搜索出错，请稍后重试</p>
+                    </div>
+                `;
+                }
+            }
+
+            // 添加文档
+            async function addDocument() {
+                const title = document
+                    .getElementById('doc-title')
+                    .value
+                    .trim();
+                const content = document
+                    .getElementById('doc-content')
+                    .value
+                    .trim();
+
+                if (!content) {
+                    showToast('请输入文档内容', 'warning');
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/documents`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({title, content})
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast('文档添加成功', 'success');
+                        document
+                            .getElementById('doc-title')
+                            .value = '';
+                        document
+                            .getElementById('doc-content')
+                            .value = '';
+                        refreshDocuments();
+                    } else {
+                        showToast(data.message || '添加失败', 'error');
+                    }
+                } catch (error) {
+                    console.error('添加文档失败:', error);
+                    showToast('添加文档失败', 'error');
+                }
+            }
+
+            // 删除文档
+            async function deleteDocument(docId) {
+                if (!confirm('确定要删除这个文档吗？')) 
+                    return;
+                
+                try {
+                    const response = await fetch(`${API_BASE}/api/documents/${docId}`, {method: 'DELETE'});
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast('文档已删除', 'success');
+                        refreshDocuments();
+                    } else {
+                        showToast(data.message || '删除失败', 'error');
+                    }
+                } catch (error) {
+                    console.error('删除文档失败:', error);
+                    showToast('删除文档失败', 'error');
+                }
+            }
+
+            // 加载示例数据
+            async function loadSamples() {
+                try {
+                    showToast('正在加载示例数据...', 'info');
+                    const response = await fetch(`${API_BASE}/api/samples`, {method: 'POST'});
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast(`已加载 ${data.added_count} 个示例文档`, 'success');
+                        refreshDocuments();
+                    } else {
+                        showToast(data.message || '加载失败', 'error');
+                    }
+                } catch (error) {
+                    console.error('加载示例数据失败:', error);
+                    showToast('加载示例数据失败', 'error');
+                }
+            }
+
+            // 确认清空
+            function confirmClear() {
+                if (!confirm('确定要清空所有数据吗？此操作不可撤销！')) 
+                    return;
+                clearAll();
+            }
+
+            // 清空所有数据
+            async function clearAll() {
+                try {
+                    const response = await fetch(`${API_BASE}/api/clear`, {method: 'POST'});
+                    const data = await response.json();
+
+                    if (data.success) {
+                        showToast('已清空所有数据', 'success');
+                        refreshDocuments();
+                    } else {
+                        showToast(data.message || '清空失败', 'error');
+                    }
+                } catch (error) {
+                    console.error('清空数据失败:', error);
+                    showToast('清空数据失败', 'error');
+                }
+            }
+
+            // 显示 Toast 通知
+            function showToast(message, type = 'info') {
+                const toast = document.getElementById('toast');
+                const toastMessage = document.getElementById('toast-message');
+                const toastIcon = document.getElementById('toast-icon');
+
+                const colors = {
+                    success: 'bg-green-500 text-white',
+                    error: 'bg-red-500 text-white',
+                    warning: 'bg-yellow-500 text-white',
+                    info: 'bg-blue-500 text-white'
+                };
+
+                const icons = {
+                    success: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>',
+                    error: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>',
+                    warning: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>',
+                    info: '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
+                };
+
+                toast
+                    .querySelector('div')
+                    .className = `px-5 py-3 rounded-xl shadow-lg flex items-center gap-3 max-w-sm ${colors[type]}`;
+                toastIcon.innerHTML = icons[type];
+                toastMessage.textContent = message;
+
+                toast
+                    .classList
+                    .remove('translate-y-full', 'opacity-0');
+
+                setTimeout(() => {
+                    toast
+                        .classList
+                        .add('translate-y-full', 'opacity-0');
+                }, 3000);
+            }
+
+            // HTML 转义
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        </script>
+    </body>
+</html>
