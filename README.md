@@ -21,7 +21,7 @@ pip install -r requirements.txt
 ### 2. 启动服务
 
 ```bash
-python api/app.py
+python main
 ```
 
 ### 3. 访问 Demo
